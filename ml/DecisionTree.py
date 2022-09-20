@@ -44,21 +44,23 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
             return pretty_str
 
-    def __init__(self):
-        self._root = None
+    def __init__(self, max_depth=2**63, label: Label = None):
         self._depth = 1
-        self._heuristic = None
         self._graph = None
+        self._heuristic = None
+        self._max_depth = max_depth
+        self._label = label
+        self._root = None
 
     def fit(self, df: pd.DataFrame, heuristic='entropy', max_depth=2**63):
         """
-        :param df: dataframe needs to have column names and last column should be the label,
+        :param df: dataframe needs to have column names and last column should be the label
         :param heuristic: [default = 'entropy', 'majority_error', 'gini_index']
         :param max_depth: max permitted depth of decision tree
         :return:
         """
 
-        self._reset()
+        self.__init__(max_depth, self.Label(df.columns[-1], df[df.columns[-1]].tolist()))
 
         if heuristic == 'entropy':
             self._heuristic = self._entropy
@@ -73,11 +75,9 @@ class DecisionTreeClassifier(Model, abc.ABC):
         for attr in df.columns[:-1]:
             attributes[attr] = list(set(df[attr]))
 
-        label = self.Label(df.columns[-1], df[df.columns[-1]].tolist())
-
         row_filter = pd.Series([True] * len(df))
 
-        self._root = self._id3(df, row_filter, attributes, label, 1, max_depth)
+        self._root = self._id3(df, row_filter, attributes, 1)
 
     def predict(self, input_features: pd.Series):
         def dfs(node: DecisionTreeClassifier.Node, inp: pd.Series):
@@ -118,26 +118,20 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
         self._graph.render()
 
-    def _reset(self):
-        self._root = None
-        self._depth = 1
-        self._heuristic = None
-        self._graph = None
-
-    def _id3(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, label: Label, depth: int, max_depth: int):
+    def _id3(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, depth: int):
         self._depth = max(self._depth, depth)
         node = self.Node()
 
-        if depth == max_depth:
-            node.label = df.loc[row_filter].groupby(label.name).size().idxmax()
+        if depth == self._max_depth:
+            node.label = df.loc[row_filter].groupby(self._label.name).size().idxmax()
             return node
 
-        if len(df.loc[row_filter, :].groupby(label.name).size()) == 1:
-            node.label = df.loc[row_filter, label.name].values[0]
+        if len(df.loc[row_filter, :].groupby(self._label.name).size()) == 1:
+            node.label = df.loc[row_filter, self._label.name].values[0]
             return node
 
         for attr in attributes.keys():
-            curr_info_gain = self._info_gain(df, row_filter, attributes, attr, label)
+            curr_info_gain = self._info_gain(df, row_filter, attributes, attr)
             node.info.append((curr_info_gain, attr))
             if node.info_gain < curr_info_gain:
                 node.info_gain = curr_info_gain
@@ -149,9 +143,9 @@ class DecisionTreeClassifier(Model, abc.ABC):
         for val in attr_values:
             new_row_filter = row_filter & (df[node.attr] == val)
             if sum(new_row_filter) == 0:
-                node.branches[val] = self.Node(df[row_filter].groupby(label.name).size().idxmax())
+                node.branches[val] = self.Node(df[row_filter].groupby(self._label.name).size().idxmax())
             else:
-                node.branches[val] = self._id3(df, new_row_filter, new_attributes, label, depth + 1, max_depth)
+                node.branches[val] = self._id3(df, new_row_filter, new_attributes, depth + 1)
 
         return node
 
@@ -173,11 +167,11 @@ class DecisionTreeClassifier(Model, abc.ABC):
     def _gini_index(ps):
         return 1 - sum(p * p for p in ps)
 
-    def _info_gain(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str, label: Label):
+    def _info_gain(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str) -> float:
         s_len = row_filter.sum()
-        gain = self._heuristic((df.loc[row_filter, :].groupby(label.name).size()) / s_len)
+        gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name).size()) / s_len)
         for attr_val in attributes[attr]:
-            freq = df.loc[row_filter & (df[attr] == attr_val), :].groupby(label.name).size()
+            freq = df.loc[row_filter & (df[attr] == attr_val), :].groupby(self._label.name).size()
             sv_len = freq.sum()
             gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
         return gain
