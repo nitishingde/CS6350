@@ -101,9 +101,9 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
         self._graph = graphviz.Digraph()
 
-        def dfs(node_: dict, node_id=str(uuid.uuid1())):
+        def dfs(node_: DecisionTreeClassifier.Node, node_id=str(uuid.uuid1())):
             self._graph.node(node_id, str(node_))
-            for attr_val, adj_node in node_['branches'].items():
+            for attr_val, adj_node in node_.branches.items():
                 adj_node_id = str(uuid.uuid1())
                 self._graph.node(adj_node_id, str(adj_node))
                 self._graph.edge(node_id, adj_node_id, label=attr_val)
