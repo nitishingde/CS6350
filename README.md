@@ -1,2 +1,3 @@
 # CS6350
-CS6350 Fall 2022 Machine Learning
+
+This is a machine learning library developed by Nitish Shingde for CS5350/6350 in University of Utah.
