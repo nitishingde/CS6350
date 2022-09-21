@@ -47,7 +47,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
             return pretty_str
 
-    def __init__(self, numerical_attributes: list = None, max_depth=2**63, label: Label = None):
+    def __init__(self, numerical_attributes: dict = None, max_depth=2**63, label: Label = None):
         self._depth = 1
         self._graph = None
         self._heuristic = None
@@ -56,10 +56,10 @@ class DecisionTreeClassifier(Model, abc.ABC):
         self._label = label
         self._root = None
 
-    def fit(self, df: pd.DataFrame, numerical_attributes: list = None, heuristic='entropy', max_depth=2**63):
+    def fit(self, df: pd.DataFrame, numerical_attributes: dict = None, heuristic='entropy', max_depth=2**63):
         """
         :param df: dataframe needs to have column names and last column should be the label
-        :param numerical_attributes: list of attributes (str) which have numerical value
+        :param numerical_attributes: dict, numerical attributes as keys and corresponding aggregate function [mean, median...]
         :param heuristic: [default = 'entropy', 'majority_error', 'gini_index']
         :param max_depth: max permitted depth of decision tree
         :return:
@@ -212,7 +212,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
         s_len = row_filter.sum()
         gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name).size()) / s_len)
 
-        threshold = df.loc[row_filter, attr].median()  # FIXME: use function agg
+        threshold = df.loc[row_filter, attr].agg(self._numerical_attributes[attr])
 
         freq = df.loc[row_filter & (df[attr] < threshold), :].groupby(self._label.name).size()
         sv_len = freq.sum()
