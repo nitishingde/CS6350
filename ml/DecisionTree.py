@@ -133,7 +133,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
         self._depth = max(self._depth, depth)
         node = self.Node()
 
-        if depth == self._max_depth:
+        if (depth == self._max_depth) or len(attributes) == 0:
             node.label = df.loc[row_filter].groupby(self._label.name).size().idxmax()
             return node
 
