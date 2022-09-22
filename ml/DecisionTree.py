@@ -59,7 +59,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
     def fit(self, df: pd.DataFrame, numerical_attributes: dict = None, heuristic='entropy', max_depth=2**63):
         """
         :param df: dataframe needs to have column names and last column should be the label
-        :param numerical_attributes: dict, numerical attributes as keys and corresponding aggregate function [mean, median...]
+        :param numerical_attributes: dict, numerical attributes as keys and corresponding aggregate function [mean, median]
         :param heuristic: [default = 'entropy', 'majority_error', 'gini_index']
         :param max_depth: max permitted depth of decision tree
         :return:
