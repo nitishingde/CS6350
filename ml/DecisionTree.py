@@ -52,7 +52,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
         self._graph = None
         self._heuristic = None
         self._max_depth = max_depth
-        self._numerical_attributes = numerical_attributes
+        self._numerical_attributes = numerical_attributes if numerical_attributes else {}
         self._label = label
         self._root = None
 
