@@ -3,6 +3,7 @@ import copy
 import graphviz
 import math
 from ml.Model import Model
+import numpy as np
 import pandas as pd
 from typing import Tuple, Any
 import uuid
@@ -47,25 +48,29 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
             return pretty_str
 
-    def __init__(self, numerical_attributes: dict = None, max_depth=2**63, label: Label = None):
+    def __init__(self, numerical_attributes: dict = None, weighted_attribute: str = None, max_features: int = None, max_depth=2**63, label: Label = None):
         self._depth = 1
         self._graph = None
         self._heuristic = None
         self._max_depth = max_depth
         self._numerical_attributes = numerical_attributes if numerical_attributes else {}
+        self._weighted_attribute = weighted_attribute
+        self._max_features = max_features
         self._label = label
         self._root = None
 
-    def fit(self, df: pd.DataFrame, numerical_attributes: dict = None, heuristic='entropy', max_depth=2**63):
+    def fit(self, df: pd.DataFrame, numerical_attributes: dict = None, weighted_attribute: str = None, max_features: int = None, heuristic='entropy', max_depth=2**63):
         """
         :param df: dataframe needs to have column names and last column should be the label
         :param numerical_attributes: dict, numerical attributes as keys and corresponding aggregate function [mean, median]
+        :param weighted_attribute: column corresponding to weights
+        :param max_features:
         :param heuristic: [default = 'entropy', 'majority_error', 'gini_index']
         :param max_depth: max permitted depth of decision tree
         :return:
         """
-
-        self.__init__(numerical_attributes, max_depth, self.Label(df.columns[-1], df[df.columns[-1]].tolist()))
+        max_features = df.columns.size - 1 if max_features is None else max_features
+        self.__init__(numerical_attributes, weighted_attribute, max_features, max_depth, self.Label(df.columns[-1], df[df.columns[-1]].tolist()))
 
         if heuristic == 'entropy':
             self._heuristic = self._entropy
@@ -78,7 +83,9 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
         attributes = {}
         for attr in df.columns[:-1]:
-            if attr in self._numerical_attributes:
+            if attr == weighted_attribute:
+                continue
+            elif attr in self._numerical_attributes:
                 attributes[attr] = []
             else:
                 attributes[attr] = list(set(df[attr]))
@@ -134,14 +141,22 @@ class DecisionTreeClassifier(Model, abc.ABC):
         node = self.Node()
 
         if (depth == self._max_depth) or len(attributes) == 0:
-            node.label = df.loc[row_filter].groupby(self._label.name).size().idxmax()
+            node.label = df.loc[row_filter].groupby(self._label.name).size().idxmax() if self._weighted_attribute is None else df.loc[row_filter].groupby(self._label.name)[self._weighted_attribute].sum().idxmax()
             return node
 
         if len(df.loc[row_filter, :].groupby(self._label.name).size()) == 1:
             node.label = df.loc[row_filter, self._label.name].values[0]
             return node
 
+        avail_attrs = attributes.keys()
+        try:
+            avail_attrs = np.random.choice(a=list(attributes.keys()), size=self._max_features, replace=False)
+        except:
+            pass
+
         for attr in attributes.keys():
+            if attr not in avail_attrs:
+                continue
             curr_info_gain, threshold = self._info_gain(df, row_filter, attributes, attr)
             node.info.append((curr_info_gain, attr))
             if node.info_gain < curr_info_gain:
@@ -197,7 +212,13 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
     def _info_gain(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str) -> Tuple[float, Any]:
         if attr in self._numerical_attributes:
+            if self._weighted_attribute:
+                return self._info_gain_weighted_numerical(df, row_filter, attr)
+
             return self._info_gain_numerical(df, row_filter, attr)
+
+        if self._weighted_attribute:
+            return self._info_gain_weighted(df, row_filter, attributes, attr)
 
         s_len = row_filter.sum()
         gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name).size()) / s_len)
@@ -219,6 +240,33 @@ class DecisionTreeClassifier(Model, abc.ABC):
         gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
 
         freq = df.loc[row_filter & (df[attr] >= threshold), :].groupby(self._label.name).size()
+        sv_len = freq.sum()
+        gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
+
+        return gain, threshold
+
+    def _info_gain_weighted(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str) -> Tuple[
+        float, Any]:
+        s_len = df.loc[row_filter, self._weighted_attribute].sum()
+        gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name)[self._weighted_attribute].sum())/s_len)
+        for attr_val in attributes[attr]:
+            freq = df.loc[row_filter & (df[attr] == attr_val), :].groupby(self._label.name)[self._weighted_attribute].sum()
+            sv_len = freq.sum()
+            gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
+
+        return gain, None
+
+    def _info_gain_weighted_numerical(self, df: pd.DataFrame, row_filter: pd.Series, attr: str) -> Tuple[float, Any]:
+        s_len = df.loc[row_filter, self._weighted_attribute].sum()
+        gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name)[self._weighted_attribute].sum())/s_len)
+
+        threshold = df.loc[row_filter, attr].agg(self._numerical_attributes[attr])
+
+        freq = df.loc[row_filter & (df[attr] < threshold), :].groupby(self._label.name)[self._weighted_attribute].sum()
+        sv_len = freq.sum()
+        gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
+
+        freq = df.loc[row_filter & (df[attr] >= threshold), :].groupby(self._label.name)[self._weighted_attribute].sum()
         sv_len = freq.sum()
         gain -= ((sv_len / s_len) * self._heuristic(freq / sv_len))
 
