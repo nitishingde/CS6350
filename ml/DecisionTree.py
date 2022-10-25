@@ -245,8 +245,7 @@ class DecisionTreeClassifier(Model, abc.ABC):
 
         return gain, threshold
 
-    def _info_gain_weighted(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str) -> Tuple[
-        float, Any]:
+    def _info_gain_weighted(self, df: pd.DataFrame, row_filter: pd.Series, attributes: dict, attr: str) -> Tuple[float, Any]:
         s_len = df.loc[row_filter, self._weighted_attribute].sum()
         gain = self._heuristic((df.loc[row_filter, :].groupby(self._label.name)[self._weighted_attribute].sum())/s_len)
         for attr_val in attributes[attr]:
