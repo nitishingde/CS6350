@@ -4,3 +4,4 @@ This is a machine learning library developed by Nitish Shingde for CS5350/6350 i
 - DecisionTree/run.sh
 - EnsembleLearning/run.sh
 - LinearRegression/run.sh
+- Perceptron/run.sh
